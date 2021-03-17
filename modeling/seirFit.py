@@ -15,7 +15,13 @@ class Model:
         self.ihmeData = pd.read_csv(self.ihmePath) # 4 second read time
 
         self.usData = self.ihmeData[self.ihmeData.location_name == "United States of America"]
-
+        self.usPop = 328000000
+        
+        # CSV of state names and populations
+        self.stateData = pd.read_csv("C:/devel/vaccine-distribution/stateData.csv")
+        self.stateData = self.stateData.drop(index = [0,1,2,3,4,13,56])
+        self.stateList = self.stateData.NAME
+        self.statePop = self.stateData.POPESTIMATE2019
 
         self.infections = self.usData["est_infections_lower"].values.astype(int)
         self.dates = self.usData["date"].values # Stored as str
@@ -24,22 +30,20 @@ class Model:
         self.descentDay = 1 # initBeta handles first checkpoint (day 2)
         self.checkPoints = {"t":[1],"beta":[self.initBeta]}
 
-        self.betaInterval = 2 # How often to change beta value
+        self.betaInterval = 7 # How often to change beta value
 
 
     def runSeir(self, runLength, checkPoints):
 
-        print("here")
-        self.seir = SEIRSModel(beta = self.initBeta, sigma = 1/5.2, gamma = 1/12.39, initN = 300000, initI=33)
-        print("model")
+       
+        self.seir = SEIRSModel(beta = self.initBeta, sigma = 1/5.2, gamma = 1/12.39, initN = 328000000, initI=33)
         self.seir.run(runLength, checkpoints = checkPoints)
-        print("ran")
+   
         
         # Normalizing seir output
         self.seirI = self.seir.numI[-10 * runLength:][::10]
         self.histI = self.infections[:runLength]
-
-    
+        
     def descent(self):
 
         # Params
@@ -62,20 +66,20 @@ class Model:
         # Rebounding descent until acceptable error
         while abs(error) > targetError:
 
-            print(testCheckpoint["beta"])
+           
 
             self.runSeir(self.descentDay + self.betaInterval, testCheckpoint)
             
             d = self.seirI[-1] - self.histI[-1] # getting distance
-            #print(d)
+            # print(d)
             signD = abs(d) / d
             #print(signD)
 
             overshot = signD * -1 == lastSign
-            # print(overshot)
+            
 
             lastSign = signD
-            lastD = d
+            
             
             # Break condition
             error = d / self.histI[-1]
@@ -87,9 +91,17 @@ class Model:
                 self.checkPoints["t"] = testCheckpoint["t"]
                 self.checkPoints["beta"] = testCheckpoint["beta"]
 
+                print(str(self.descentDay) + ": " + str(testCheckpoint["beta"][-1])[:5])
+
             elif not overshot:
 
-                testCheckpoint["beta"][-1] = testCheckpoint["beta"][-1] - signD * a
+                # If stuck in ascent swap direction
+                if (d > lastD and lastD != 0):
+                    testCheckpoint["beta"][-1] = testCheckpoint["beta"][-1] - signD * a
+                    
+                else:
+                    testCheckpoint["beta"][-1] = testCheckpoint["beta"][-1] - signD * a
+
                 tempCheckpoint = {}
                 tempCheckpoint["t"] = testCheckpoint["t"]
                 tempCheckpoint["beta"] = testCheckpoint["beta"]
@@ -103,22 +115,25 @@ class Model:
                 tempCheckpoint["t"] = testCheckpoint["t"]
                 tempCheckpoint["beta"] = testCheckpoint["beta"]
                 
-            print(testCheckpoint["beta"])
+            lastD = d
             
     def runModelMatcher(self):
 
-        while self.descentDay < 100:
+        while self.descentDay < 400:
             
             self.descent()
             self.descentDay = self.descentDay + self.betaInterval
 
             
-            
+    def cycleState(self):
+
+        print("cycled")
         
 
         
 # Instantiating
 model = Model()
+model.runModelMatcher()
 
     
 
