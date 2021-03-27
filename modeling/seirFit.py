@@ -16,6 +16,8 @@ class Model:
 
         self.usData = self.ihmeData[self.ihmeData.location_name == "United States of America"]
         self.usPop = 328000000
+
+        # self.data = self.usData # Initializing first runthrough as usData
         
         # CSV of state names and populations
         self.stateData = pd.read_csv("C:/devel/vaccine-distribution/stateData.csv")
@@ -23,6 +25,17 @@ class Model:
         self.stateList = self.stateData.NAME
         self.statePop = self.stateData.POPESTIMATE2019
 
+        self.vaccineData = pd.read_csv("C:/devel/vaccine-distribution/coronavirus-data-explorer.csv")
+        self.usVaccineData = self.vaccineData[self.vaccineData["Country name"] == "United States"]
+        self.vaccinationStart = 358
+        self.vaccineDates = self.usVaccineData.Day.values[self.vaccinationStart:]
+        self.fullyVaccinated = self.usVaccineData.people_fully_vaccinated.values[self.vaccinationStart:]
+        
+        # left setting nans
+        for i in np.where(np.isnan(self.fullyVaccinated))[0]:
+            self.fullyVaccinated[i] = self.fullyVaccinated[i-1]
+        
+        
         self.infections = self.usData["est_infections_lower"].values.astype(int)
         self.dates = self.usData["date"].values # Stored as str
 
@@ -30,7 +43,7 @@ class Model:
         self.descentDay = 1 # initBeta handles first checkpoint (day 2)
         self.checkPoints = {"t":[1],"beta":[self.initBeta]}
 
-        self.betaInterval = 7 # How often to change beta value
+        self.betaInterval = 10 # How often to change beta value
 
 
     def runSeir(self, runLength, checkPoints):
@@ -125,15 +138,33 @@ class Model:
             self.descentDay = self.descentDay + self.betaInterval
 
             
-    def cycleState(self):
+    def createUnvaccinatedCheckpoints(self):
 
-        print("cycled")
+        self.unvaxCheckpoints = {}
+        self.unvaxCheckpoints["t"] = self.checkPoints["t"]
+        self.unvaxCheckpoints["beta"] = self.checkPoints["beta"]
+
+        for timeIdx in range(len(self.checkPoints["t"])):
+
+            if self.checkPoints["t"][timeIdx] >= self.vaccinationStart:
+
+                adjTime = self.checkPoints["t"][timeIdx] - self.vaccinationStart
+                vaccinations = self.fullyVaccinated[adjTime]
+
+                vaxProp = vaccinations / self.usPop
+                self.unvaxCheckpoints["beta"][timeIdx] = self.checkPoints["beta"][timeIdx] / (1 / 1-vaxProp)
         
 
         
 # Instantiating
 model = Model()
 model.runModelMatcher()
+vaxCheckpoints = model.checkPoints
+vaxSeir = model.seir
 
-    
+model.createUnvaccinatedCheckpoints()
+unvaxCheckpoints = model.checkPoints
+unvaxSeir = model.seir
+
+# model.runSeir(model.descentDay, model.unvaxCheckpoints)
 
