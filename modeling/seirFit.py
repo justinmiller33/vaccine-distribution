@@ -164,7 +164,6 @@ vaxSeir = model.seir
 
 model.createUnvaccinatedCheckpoints()
 unvaxCheckpoints = model.checkPoints
+model.runSeir(model.descentDay, model.unvaxCheckpoints)
 unvaxSeir = model.seir
-
-# model.runSeir(model.descentDay, model.unvaxCheckpoints)
 
